@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 
-# User-provided configuration must always be respected.
-#
-# Therefore, this script must only derives Airflow AIRFLOW__ variables from other variables
-# when the user did not provide their own configuration.
-
 TRY_LOOP="20"
 
 # Global defaults and back-compat
 : "${AIRFLOW_HOME:="/usr/local/airflow"}"
-: "${AIRFLOW__CORE__FERNET_KEY:=${FERNET_KEY:=$(python -c "from cryptography.fernet import Fernet; FERNET_KEY = Fernet.generate_key().decode(); print(FERNET_KEY)")}}"
+: "${AIRFLOW__CORE__FERNET_KEY:=${FERNET_KEY:=$(python3.8 -c "from cryptography.fernet import Fernet; FERNET_KEY = Fernet.generate_key().decode(); print(FERNET_KEY)")}}"
 : "${AIRFLOW__CORE__EXECUTOR:=${EXECUTOR:-Sequential}Executor}"
 
 # Load DAGs examples (default: Yes)
@@ -37,7 +32,7 @@ wait_for_port() {
       echo >&2 "$(date) - $host:$port still not reachable, giving up"
       exit 1
     fi
-    echo "$(date) - waiting for $name... $j/$TRY_LOOP"
+    echo "$(date) - waiting for $name at $host : $port ..... $j/$TRY_LOOP"
     sleep 5
   done
 }
@@ -47,12 +42,12 @@ if [ "$AIRFLOW__CORE__EXECUTOR" != "SequentialExecutor" ]; then
   # Check if the user has provided explicit Airflow configuration concerning the database
   if [ -z "$AIRFLOW__CORE__SQL_ALCHEMY_CONN" ]; then
     # Default values corresponding to the default compose files
-    : "${POSTGRES_HOST:="postgres"}"
-    : "${POSTGRES_PORT:="5432"}"
-    : "${POSTGRES_USER:="airflow"}"
-    : "${POSTGRES_PASSWORD:="airflow"}"
-    : "${POSTGRES_DB:="airflow"}"
-    : "${POSTGRES_EXTRAS:-""}"
+    : "${POSTGRES_HOST:=$ENV_POSTGRES_HOST}"
+    : "${POSTGRES_PORT:=$ENV_POSTGRES_PORT}"
+    : "${POSTGRES_USER:=$ENV_POSTGRES_USER}"
+    : "${POSTGRES_PASSWORD:=$ENV_POSTGRES_PASSWORD}"
+    : "${POSTGRES_DB:=$ENV_POSTGRES_DB}"
+    : "${POSTGRES_EXTRAS:-$ENV_POSTGRES_EXTRAS}"
 
     AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}${POSTGRES_EXTRAS}"
     export AIRFLOW__CORE__SQL_ALCHEMY_CONN
@@ -82,12 +77,11 @@ if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
   # Check if the user has provided explicit Airflow configuration concerning the broker
   if [ -z "$AIRFLOW__CELERY__BROKER_URL" ]; then
     # Default values corresponding to the default compose files
-    : "${REDIS_PROTO:="redis://"}"
-    : "${REDIS_HOST:="redis"}"
-    : "${REDIS_PORT:="6379"}"
-    : "${REDIS_PASSWORD:=""}"
-    : "${REDIS_DBNUM:="1"}"
-
+    : "${REDIS_PROTO:=$ENV_REDIS_PROTO}"
+    : "${REDIS_HOST:=$ENV_REDIS_HOST}"
+    : "${REDIS_PORT:=$ENV_REDIS_PORT}"
+    : "${REDIS_PASSWORD:=$ENV_REDIS_PASSWORD}"
+    : "${REDIS_DBNUM:=$ENV_REDIS_DBNUM}"
     # When Redis is secured by basic auth, it does not handle the username part of basic auth, only a token
     if [ -n "$REDIS_PASSWORD" ]; then
       REDIS_PREFIX=":${REDIS_PASSWORD}@"
@@ -107,29 +101,35 @@ if [ "$AIRFLOW__CORE__EXECUTOR" = "CeleryExecutor" ]; then
   wait_for_port "Redis" "$REDIS_HOST" "$REDIS_PORT"
 fi
 
-case "$1" in
+case "$@"  in
   webserver)
-    airflow initdb
+    echo "Starting the Webserver ............."
+    airflow db upgrade
+    airflow db migrate
+    airflow users  create --role Admin --username "$ADMIN_USER" --email "$ADMIN_EMAIL" --firstname admin --lastname admin --password "$ADMIN_PASS"
     if [ "$AIRFLOW__CORE__EXECUTOR" = "LocalExecutor" ] || [ "$AIRFLOW__CORE__EXECUTOR" = "SequentialExecutor" ]; then
       # With the "Local" and "Sequential" executors it should all run in one container.
       airflow scheduler &
     fi
     exec airflow webserver
     ;;
-  worker|scheduler)
+  worker|flower)
+    echo "Starting the "$@" ............."
     # Give the webserver time to run initdb.
     sleep 10
-    exec airflow "$@"
+    exec airflow celery "$@"
     ;;
-  flower)
+  scheduler)
+    echo "Starting the scheduler ............."
     sleep 10
-    exec airflow "$@"
+    exec airflow scheduler
     ;;
   version)
-    exec airflow "$@"
+    #exec airflow "$@"
     ;;
   *)
     # The command is something like bash, not an airflow subcommand. Just run it in the right environment.
-    exec "$@"
+    echo "Doing another stufff"
+    #exec "$@"
     ;;
 esac

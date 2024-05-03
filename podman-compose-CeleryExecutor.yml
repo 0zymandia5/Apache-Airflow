@@ -1,0 +1,106 @@
+version: '2.1'
+services:
+    redis:
+        image: 'redis:5.0.5'
+        ports:
+            - "6379:6379"
+        # command: redis-server --requirepass redispass
+
+    postgres:
+        image: postgres:9.6
+        environment:
+            - POSTGRES_USER=airflow
+            - POSTGRES_PASSWORD=airflow
+            - POSTGRES_DB=airflow
+        ports:
+            - "5432:5432"
+        # Uncomment these lines to persist data on the local filesystem.
+        #     - PGDATA=/var/lib/postgresql/data/pgdata
+        # volumes:
+        #     - ./pgdata:/var/lib/postgresql/data/pgdata
+
+    webserver:
+        image: localhost/airflow-evean:0.03
+        restart: always
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - ENV_POSTGRES_HOST=postgres
+            - ENV_POSTGRES_USER=airflow
+            - ENV_POSTGRES_PASSWORD=airflow
+            - ENV_POSTGRES_DB=airflow
+            - ENV_POSTGRES_PORT=5432
+            - ENV_REDIS_PROTO=redis://
+            - ENV_REDIS_HOST=redis
+            - ENV_REDIS_PORT=6379
+            - ENV_REDIS_DBNUM=1
+            - ADMIN_EMAIL=fake.mail@fakeDomain.com
+            - ADMIN_USER=admin
+            - ADMIN_PASS=admin
+            # - REDIS_PASSWORD=redispass
+        ports:
+            - "3000:8080"
+        command:
+            webserver
+
+    flower:
+        image: localhost/airflow-evean:0.03
+        restart: always
+        environment:
+            - EXECUTOR=Celery
+            - ENV_POSTGRES_HOST=postgres
+            - ENV_POSTGRES_USER=airflow
+            - ENV_POSTGRES_PASSWORD=airflow
+            - ENV_POSTGRES_DB=airflow
+            - ENV_POSTGRES_PORT=5432
+            - ENV_REDIS_PROTO=redis://
+            - ENV_REDIS_HOST=redis
+            - ENV_REDIS_PORT=6379
+            - ENV_REDIS_DBNUM=1
+            # - REDIS_PASSWORD=redispass
+        ports:
+            - 5555:5555
+        command: flower
+
+    scheduler:
+        image: localhost/airflow-evean:0.03
+        restart: always
+        environment:
+            - LOAD_EX=n
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - ENV_POSTGRES_HOST=postgres
+            - ENV_POSTGRES_USER=airflow
+            - ENV_POSTGRES_PASSWORD=airflow
+            - ENV_POSTGRES_DB=airflow
+            - ENV_POSTGRES_PORT=5432
+            - ENV_REDIS_PROTO=redis://
+            - ENV_REDIS_HOST=redis
+            - ENV_REDIS_PORT=6379
+            - ENV_REDIS_DBNUM=1
+            # - REDIS_PASSWORD=redispass
+        command: scheduler
+        ports:
+            - 8080:8080
+
+    worker:
+        image: localhost/airflow-evean:0.03
+        restart: always
+        environment:
+            - FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+            - EXECUTOR=Celery
+            - ENV_POSTGRES_HOST=postgres
+            - ENV_POSTGRES_USER=airflow
+            - ENV_POSTGRES_PASSWORD=airflow
+            - ENV_POSTGRES_DB=airflow
+            - ENV_POSTGRES_PORT=5432
+            - ENV_REDIS_PROTO=redis://
+            - ENV_REDIS_HOST=redis
+            - ENV_REDIS_PORT=6379
+            - ENV_REDIS_DBNUM=1
+            - C_FORCE_ROOT=true
+        #     # - REDIS_PASSWORD=redispass
+        ports:
+            - 8793:8793
+        command: worker
